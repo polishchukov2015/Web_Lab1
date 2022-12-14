@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta name="description" content="Klein Bottle of Dmytryk Olha">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+        <meta charset="utf-8">
+        <title> Klein Bottle Evolved</title>
+        <style>
+          html, body {
+            margin: 0px;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: monospace;
+            background-color: beige;
+          }
+          canvas {
+            width: 100%;
+            height: 100%;
+          }
+       </style>
+  <script id="vertex-shader" type="x-shader/x-vertex">
+    uniform mat4 u_worldViewProjection;
+    uniform vec3 u_lightWorldPos;
+    uniform mat4 u_world;
+    uniform mat4 u_viewInverse;
+    uniform mat4 u_worldInverseTranspose;
+
+    attribute vec4 a_position;
+    attribute vec3 a_normal;
+    attribute vec2 a_texcoord;
+
+    varying vec4 v_position;
+    varying vec2 v_texCoord;
+    varying vec3 v_normal;
+    varying vec3 v_surfaceToLight;
+    varying vec3 v_surfaceToView;
+
+    void main() {
+      v_texCoord = a_texcoord;
+      v_position = (u_worldViewProjection * a_position);
+      v_normal = (u_worldInverseTranspose * vec4(a_normal, 0)).xyz;
+      v_surfaceToLight = u_lightWorldPos - (u_world * a_position).xyz;
+      v_surfaceToView = (u_viewInverse[3] - (u_world * a_position)).xyz;
+      gl_Position = v_position;
+    }
+  </script>
+  <script id="fragment-shader" type="x-shader/x-fragment">
+    precision mediump float;
+
+    varying vec4 v_position;
+    varying vec2 v_texCoord;
+    varying vec3 v_normal;
+    varying vec3 v_surfaceToLight;
+    varying vec3 v_surfaceToView;
+
+	uniform float u_time;
+    uniform vec4 u_lightColor;
+	uniform vec4 u_objectColor;
+	uniform vec4 u_diffuseMult;
+    uniform vec4 u_ambient;
+    uniform sampler2D u_diffuse;
+    uniform vec4 u_specular;
+    uniform float u_shininess;
+    uniform float u_specularFactor;
+	uniform lowp int u_shaderType;
+
+    vec4 lit(float l ,float h, float m) {
+	  return vec4(1.0,
+                  abs(l),
+                  (l > 0.0) ? pow(max(0.0, h), m) : 0.0,
+                  1.0);
+    }
+	
+	vec4 timedStrip() {
+	  vec4 color = vec4(0.0, 0.0, 0.0, 1.0);
+	  if(abs(mod(abs(v_position.x + v_position.y), abs(.5 * sin(u_time * 5.0)))) < .2) {
+		color.x = 1.0;
+	  }
+	  if(abs(mod(abs(v_position.x - abs(v_position.y)), abs(.5 * sin(u_time * 10.0)))) < .2) {
+		color.y = 1.0;
+	  }
+	  if(abs(mod(abs(v_position.z - abs(v_position.y)), abs(.5 * sin(u_time * 10.0)))) < .2) {
+		color.z = 1.0;
+	  }
+
+	  return color;
+	}
+
+    void main() {
+	  
+	  vec3 a_normal = normalize(v_normal);
+	  vec4 outColor;
+	  
+      if ((u_shaderType == 1) || (u_shaderType == 2) || (u_shaderType == 4)) {
+	      vec4 diffuseColor;
+          if (u_shaderType == 1) {
+		    diffuseColor = texture2D(u_diffuse, v_texCoord);
+		  } else if (u_shaderType == 2) {
+		  	diffuseColor = u_objectColor;
+		  } else {
+		    diffuseColor = timedStrip();
+		  }
+
+		  vec3 surfaceToLight = normalize(v_surfaceToLight);
+		  vec3 surfaceToView = normalize(v_surfaceToView);
+		  vec3 halfVector = normalize(surfaceToLight + surfaceToView);
+		  vec4 litR = lit(dot(a_normal, surfaceToLight),
+							dot(a_normal, halfVector), u_shininess);
+		 
+		  outColor = vec4((
+			  u_lightColor * (diffuseColor * litR.y + diffuseColor * u_ambient +
+							u_specular * litR.z * u_specularFactor)).rgb,
+				  diffuseColor.a);
+      } else if (u_shaderType == 3) {
+	      outColor = vec4(a_normal, 1.0);
+	  } 
+	  
+      gl_FragColor = outColor;
+    }
+  </script>
+  <script src="http://twgljs.org/dist/twgl-full.min.js"></script>
+  <script src="main.js"></script> 
+  <script src="jquery-2.2.2.min.js"></script> 
+  </head>
+    
+  <body>
+      <div><h3>Dmytryk Olha --  Klein Bottle</h3></div>
+	  <div><h5>
+      Klein Bottle Parameters:
+	  	a <input type="text" id="grayParameterA" size="3" maxlength="3" value="2">
+	    n <input type="text" id="grayParameterN" size="3" maxlength="3" value="2">
+	    m <input type="text" id="grayParameterM" size="3" maxlength="3" value="1">
+	  </h5></div>
+
+      
+  <div>
+    Projection
+	<select id="projection">
+	  <option value="prespective" selected="selected">Prospective</option>
+	  <option value="orthogonal">Orthogonal</option>
+	</select>
+  </div>
+  <div>
+    Mesh Density
+	<select id="meshDensity">
+	  <option value="8" selected="selected">8</option>
+	  <option value="16">16</option>
+	  <option value="32">32</option>
+	  <option value="64">64</option>
+	</select>
+  </div>
+  
+  <div>
+    Light Color
+	R <input type="text" id="lightR" size="3" maxlength="3" value="85">
+	G <input type="text" id="lightG" size="3" maxlength="3" value="140">
+	B <input type="text" id="lightB" size="3" maxlength="3" value="137">
+	<button id="randomLightColor">Random</button>
+  </div>
+  <div>
+    Shader
+	<select id="shaderType">
+	  <option value="1">Texture</option>
+	  <option value="2" selected="selected">Object</option>
+      <option value="3">Normal</option>
+	</select>
+  </div>
+  <div id="objectColorSection">
+    Object Color
+	R <input type="text" id="objectR" size="3" maxlength="3" value="217">
+	G <input type="text" id="objectG" size="3" maxlength="3" value="133">
+	B <input type="text" id="objectB" size="3" maxlength="3" value="59">
+	<button id="randomObjectColor">Random</button>
+  </div>
+  <div id="textureTypeSection">
+    Texture Type
+    <select id="textureType">
+      <option value="checker" selected="selected">checker</option>
+      <option value="strip">strip</option>
+    </select>
+  </div>
+
+  <div>
+    Camera Distance Scale
+    <input id="sliderCS" type="range" min="1" max="16" />
+  </div>
+  <div style="">
+    Camera Angle X
+    <input id="sliderCX" type="range" min="-100" max="100" />
+    Camera Angle Y
+    <input id="sliderCY" type="range" min="-100" max="100" />
+    Camera Angle Z
+    <input id="sliderCZ" type="range" min="-100" max="100" />
+  </div>
+  <div>
+    Drag Mouse to Move Model Horizontally and Vertically
+  <input id="sliderX" type="range" min="-100" max="100" style="display: none">
+  <input id="sliderY" type="range" min="-100" max="100" style="display: none">
+  <br>
+    Rotate around Z axis
+  <input id="sliderZ" type="range" min="-100" max="100">
+  </div>
+  <div><canvas id="myCanvas"></canvas></div>
+  </body>
+    
+</html>
